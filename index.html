@@ -48,14 +48,6 @@
     html.dark .compare-table th.sticky-col-3, html.dark .compare-table td.sticky-col-3 { box-shadow: 2px 0 4px -1px rgba(0,0,0,0.4); }
     /* thead sticky rows */
     .compare-table thead th { position: sticky; top: 0; z-index: 3; }
-
-    /* Existing value highlight in Add Data tab */
-    .lab-val-input.has-value { background-color: #fefce8 !important; border-color: #f59e0b !important; }
-    html.dark .lab-val-input.has-value { background-color: rgba(245,158,11,0.15) !important; border-color: #d97706 !important; }
-
-    /* Inline edit row for biomarker metadata */
-    .bio-edit-input { width:100%; padding:2px 6px; border:1px solid #0284c7; border-radius:4px; font-size:11px; background:#eff6ff; color:#1e293b; }
-    html.dark .bio-edit-input { background:#1e3a5f; color:#e2e8f0; border-color:#0284c7; }
     .compare-table thead th.sticky-col { z-index: 4; }
     .main-tab-btn { padding: 8px 18px; font-size: 0.8rem; font-weight: 600; border-radius: 8px; border: none; cursor: pointer; transition: background 0.15s, color 0.15s; color: #94a3b8; background: transparent; }
     .main-tab-btn.active { background: #0284c7; color: #fff; }
@@ -64,6 +56,7 @@
     html.dark .chart-card { background: #0f172a !important; border-color: #334155 !important; }
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="https://accounts.google.com/gsi/client" async defer></script>
 </head>
 <body class="text-slate-800 dark:text-slate-100 antialiased bg-slate-50 dark:bg-slate-950">
 
@@ -105,23 +98,35 @@
         <div class="surface-card bg-white dark:bg-slate-900 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-4 no-print">
             <div class="flex flex-wrap items-center gap-3 text-xs">
                 <span class="font-semibold text-slate-600 dark:text-slate-300"><i class="fa-solid fa-database text-sky-600 mr-1"></i>Data source:</span>
-                <span id="dataSourceLabel" class="text-slate-500 dark:text-slate-400">No CSV loaded — showing empty dashboard</span>
+                <span id="dataSourceLabel" class="text-slate-500 dark:text-slate-400">Not signed in — click "Sign in with Google" to load your data</span>
                 <span class="flex-1"></span>
-                <label class="px-3 py-1.5 font-medium bg-sky-600 hover:bg-sky-700 text-white rounded-lg cursor-pointer transition">
-                    <i class="fa-solid fa-upload mr-1"></i>Upload CSV
-                    <input type="file" id="csvFileInput" accept=".csv" class="hidden" onchange="handleCsvUpload(event)">
-                </label>
-                <button id="connectBtn" onclick="connectFileHandle()" class="px-3 py-1.5 font-medium bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-lg transition">
-                    <i class="fa-solid fa-link mr-1"></i>Connect File (Auto-Save)
+                <!-- Signed-out state: Sign in button -->
+                <button id="googleSignInBtn" onclick="googleSignIn()"
+                    class="px-3 py-1.5 font-medium bg-sky-600 hover:bg-sky-700 text-white rounded-lg flex items-center gap-2 transition">
+                    <i class="fa-brands fa-google"></i>Sign in with Google
                 </button>
-                <button id="saveBtn" onclick="saveToConnectedFile()" disabled class="px-3 py-1.5 font-medium bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg transition opacity-40 cursor-not-allowed">
-                    <i class="fa-solid fa-floppy-disk mr-1"></i>Save to CSV
+                <!-- Signed-in state: Load, Save, Download, Sign Out — hidden until signed in -->
+                <button id="driveLoadBtn" onclick="loadFromDrive()" style="display:none"
+                    class="px-3 py-1.5 font-medium bg-sky-600 hover:bg-sky-700 text-white rounded-lg flex items-center gap-2 transition">
+                    <i class="fa-brands fa-google-drive"></i>Load from Drive
                 </button>
-                <button onclick="downloadCsv()" class="px-3 py-1.5 font-medium bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-lg transition">
-                    <i class="fa-solid fa-download mr-1"></i>Download CSV
+                <button id="driveSaveBtn" onclick="saveToDrive()" style="display:none"
+                    class="px-3 py-1.5 font-medium bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg flex items-center gap-2 transition">
+                    <i class="fa-solid fa-floppy-disk"></i>Save to Drive
+                </button>
+                <button id="driveDownloadBtn" onclick="downloadCsv()" style="display:none"
+                    class="px-3 py-1.5 font-medium bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-lg flex items-center gap-2 transition">
+                    <i class="fa-solid fa-download"></i>Download CSV
+                </button>
+                <button id="googleSignOutBtn" onclick="googleSignOut()" style="display:none"
+                    class="px-3 py-1.5 font-medium bg-red-600 hover:bg-red-700 text-white rounded-lg flex items-center gap-2 transition">
+                    <i class="fa-solid fa-right-from-bracket"></i>Sign Out
                 </button>
             </div>
-            <p id="fsaNote" class="text-[11px] text-slate-400 dark:text-slate-500 mt-2 hidden"><i class="fa-solid fa-circle-info mr-1"></i>"Connect File" needs Chrome or Edge. In Safari/Firefox, use Upload + Download CSV instead.</p>
+            <p id="driveNote" class="text-[11px] text-slate-400 dark:text-slate-500 mt-2 hidden">
+                <i class="fa-solid fa-circle-info mr-1"></i>
+                <span id="driveNoteText"></span>
+            </p>
         </div>
 
         <!-- Patient Card -->
@@ -324,10 +329,9 @@
                         <label class="block font-semibold text-slate-600 dark:text-slate-300 mb-1"><i class="fa-solid fa-calendar-day text-sky-500 mr-1"></i>Date for this entry</label>
                         <input type="date" id="labFormDate" onchange="renderAddLabTable()" class="px-2 py-1.5 border border-slate-300 dark:border-slate-600 rounded-lg bg-slate-50 dark:bg-slate-800 dark:text-slate-100">
                     </div>
-                    <p class="text-[11px] text-slate-400 dark:text-slate-500 max-w-lg">Select a date to load existing values (highlighted amber). Enter/update values — flags auto-calculate. Pencil edits metadata; trash removes a biomarker.</p>
+                    <p class="text-[11px] text-slate-400 dark:text-slate-500 max-w-lg">Test, Unit and Range are fixed. Select a date, enter values — High/Low flag auto-calculates. Use <strong>Add Row</strong> for a new biomarker.</p>
                     <div class="ml-auto flex flex-wrap gap-2">
                         <button onclick="saveLabTableEntries()" class="px-3 py-1.5 bg-sky-600 hover:bg-sky-700 text-white rounded-lg font-semibold"><i class="fa-solid fa-check mr-1"></i>Save Entries</button>
-                        <button id="deleteDateBtn" onclick="deleteTestDate()" style="display:none" class="px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded-lg font-semibold"><i class="fa-solid fa-calendar-xmark mr-1"></i>Delete Date</button>
                         <button onclick="cancelLabForm()" class="px-3 py-1.5 bg-slate-200 hover:bg-slate-300 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 rounded-lg font-semibold"><i class="fa-solid fa-xmark mr-1"></i>Cancel</button>
                         <button onclick="clearAllLabData()" class="px-3 py-1.5 bg-red-50 hover:bg-red-100 dark:bg-red-900/20 dark:hover:bg-red-900/40 text-red-600 dark:text-red-400 border border-red-200 dark:border-red-800 rounded-lg font-semibold"><i class="fa-solid fa-trash-can mr-1"></i>Clear Unsaved</button>
                     </div>
@@ -340,10 +344,9 @@
                             <th class="sticky-col sticky-col-3 py-2.5 px-3 text-left bg-slate-100 dark:bg-slate-800 whitespace-nowrap">Range</th>
                             <th class="py-2.5 px-3 text-center whitespace-nowrap min-w-[120px]">Value</th>
                             <th class="py-2.5 px-3 text-center whitespace-nowrap">Flag</th>
-                            <th class="py-2.5 px-3 text-center whitespace-nowrap">Actions</th>
                         </tr></thead>
                         <tbody id="addLabTableBody" class="divide-y divide-slate-100 dark:divide-slate-700">
-                            <tr><td colspan="6" class="py-6 text-center text-slate-400 dark:text-slate-500 text-xs">Load a CSV to see biomarkers here, then select a date and enter values.</td></tr>
+                            <tr><td colspan="5" class="py-6 text-center text-slate-400 dark:text-slate-500 text-xs">Load a CSV to see biomarkers here, then select a date and enter values.</td></tr>
                         </tbody>
                     </table>
                 </div>
@@ -376,15 +379,9 @@
                 <div><label class="block font-semibold text-slate-600 dark:text-slate-300 mb-1">Notes (optional)</label>
                     <textarea id="infoFormNotes" rows="2" class="w-full px-2 py-1.5 border border-slate-300 dark:border-slate-600 rounded-lg bg-slate-50 dark:bg-slate-800 dark:text-slate-100"></textarea></div>
                 <div class="flex flex-wrap items-center gap-2">
-                    <button id="infoSaveBtn" onclick="addInfoRecord()" class="px-4 py-2 bg-sky-600 hover:bg-sky-700 text-white rounded-lg font-semibold"><i class="fa-solid fa-plus mr-1"></i>Add Record</button>
-                    <button id="infoCancelEditBtn" onclick="cancelInfoEdit()" style="display:none" class="px-4 py-2 bg-slate-200 hover:bg-slate-300 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 rounded-lg font-semibold"><i class="fa-solid fa-xmark mr-1"></i>Cancel Edit</button>
+                    <button onclick="addInfoRecord()" class="px-4 py-2 bg-sky-600 hover:bg-sky-700 text-white rounded-lg font-semibold"><i class="fa-solid fa-plus mr-1"></i>Add Record</button>
                     <button onclick="cancelInfoForm()" class="px-4 py-2 bg-slate-200 hover:bg-slate-300 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 rounded-lg font-semibold"><i class="fa-solid fa-xmark mr-1"></i>Cancel</button>
                     <button onclick="clearAllInfoData()" class="ml-auto px-4 py-2 bg-red-50 hover:bg-red-100 dark:bg-red-900/20 dark:hover:bg-red-900/40 text-red-600 dark:text-red-400 border border-red-200 dark:border-red-800 rounded-lg font-semibold"><i class="fa-solid fa-trash-can mr-1"></i>Clear Unsaved</button>
-                </div>
-                <!-- Existing info records list -->
-                <div id="infoRecordsList" class="hidden mt-4 border-t border-slate-200 dark:border-slate-700 pt-4">
-                    <h4 class="font-bold text-slate-600 dark:text-slate-300 mb-2"><i class="fa-solid fa-list mr-1 text-sky-500"></i>Existing Records <span id="infoRecordsCount" class="text-xs font-normal text-slate-400"></span></h4>
-                    <div id="infoRecordsBody" class="space-y-1.5"></div>
                 </div>
             </div>
             <!-- ===== Profile Tab ===== -->
@@ -422,6 +419,15 @@
     let searchQuery = '';
     let activeMode = 'dates';
     let selectedInfoId = null;
+
+    // =========================== GOOGLE DRIVE STATE ===========================
+    // IMPORTANT: token is kept only in memory — never written to localStorage or sessionStorage.
+    // This ensures the session is fully dead when the browser tab or window is closed.
+    const GOOGLE_CLIENT_ID = '250093459904-es6oeg22e2ndgghg7lrguuvmje85806s.apps.googleusercontent.com'; // ← Replace with your OAuth Client ID
+    const DRIVE_SCOPES = 'https://www.googleapis.com/auth/drive';
+    let googleAccessToken = null;   // in-memory only — wiped on tab/window close
+    let driveFileId = null;         // Drive file ID of the loaded CSV — used for save-back
+    let tokenClient = null;         // Google token client instance
 
     function deepClone(obj) { return JSON.parse(JSON.stringify(obj)); }
 
@@ -580,55 +586,209 @@
         if (icon) icon.className = isDark ? 'fa-solid fa-sun' : 'fa-solid fa-moon';
     }
 
-    // =========================== CSV LOAD / SAVE UI ===========================
-    function handleCsvUpload(evt) {
-        const file = evt.target.files[0];
-        if (!file) return;
-        file.text().then(text => {
-            loadFromCsvText(text);
-            commitSavedBaseline();
-            document.getElementById('dataSourceLabel').textContent = 'Loaded from: ' + file.name + ' (upload — use Download CSV to save changes)';
-            afterDataLoaded();
-        });
+    // =========================== GOOGLE DRIVE AUTH & API ===========================
+
+    function showDriveNote(msg) {
+        const note = document.getElementById('driveNote');
+        const text = document.getElementById('driveNoteText');
+        if (!msg) { note.classList.add('hidden'); return; }
+        text.textContent = msg;
+        note.classList.remove('hidden');
     }
 
-    async function connectFileHandle() {
-        if (!window.showOpenFilePicker) {
-            document.getElementById('fsaNote').classList.remove('hidden');
+    function setSignedInUI(signedIn) {
+        document.getElementById('googleSignInBtn').style.display  = signedIn ? 'none'         : '';
+        document.getElementById('driveLoadBtn').style.display     = signedIn ? ''             : 'none';
+        document.getElementById('driveSaveBtn').style.display     = signedIn ? ''             : 'none';
+        document.getElementById('driveDownloadBtn').style.display = signedIn ? ''             : 'none';
+        document.getElementById('googleSignOutBtn').style.display = signedIn ? ''             : 'none';
+    }
+
+    function googleSignIn() {
+        // Initialise token client on first use (GIS library must be loaded)
+        if (!window.google || !window.google.accounts) {
+            showDriveNote('Google Sign-In library not loaded yet — please wait a moment and try again.');
             return;
         }
-        try {
-            const [handle] = await window.showOpenFilePicker({
-                types: [{ description: 'CSV', accept: { 'text/csv': ['.csv'] } }]
+        if (!tokenClient) {
+            tokenClient = google.accounts.oauth2.initTokenClient({
+                client_id: GOOGLE_CLIENT_ID,
+                scope: DRIVE_SCOPES,
+                callback: (tokenResponse) => {
+                    if (tokenResponse.error) {
+                        showDriveNote('Sign-in failed: ' + tokenResponse.error);
+                        return;
+                    }
+                    // Store token in memory only — never persisted
+                    googleAccessToken = tokenResponse.access_token;
+                    setSignedInUI(true);
+                    document.getElementById('dataSourceLabel').textContent = 'Signed in with Google — click "Load from Drive" to load your CSV';
+                    showDriveNote('Signed in successfully. Select your lab_data.csv from Google Drive.');
+                }
             });
-            fileHandle = handle;
-            const file = await handle.getFile();
-            const text = await file.text();
-            loadFromCsvText(text);
-            commitSavedBaseline();
-            document.getElementById('dataSourceLabel').textContent = 'Connected to: ' + file.name + ' (auto-save enabled)';
-            const saveBtn = document.getElementById('saveBtn');
-            saveBtn.disabled = false;
-            saveBtn.classList.remove('opacity-40', 'cursor-not-allowed');
-            afterDataLoaded();
+        }
+        // Request token — opens Google OAuth popup
+        tokenClient.requestAccessToken({ prompt: 'consent' });
+    }
+
+    function googleSignOut() {
+        if (!confirm('Sign out of Google? This will clear all loaded data from the dashboard.')) return;
+        // Revoke the token on Google\'s servers — invalidates it immediately
+        if (googleAccessToken && window.google && window.google.accounts) {
+            google.accounts.oauth2.revoke(googleAccessToken, () => {});
+        }
+        // Wipe all auth state from memory
+        googleAccessToken = null;
+        driveFileId = null;
+        tokenClient = null;
+        // Reset app data
+        PROFILE = { name: '', dob: '', gender: '' };
+        LAB_ITEMS = [];
+        INFO_ITEMS = [];
+        SAVED_LAB_ITEMS = [];
+        SAVED_INFO_ITEMS = [];
+        selectedDates = [];
+        selectedDate = '';
+        searchQuery = '';
+        activeMode = 'dates';
+        selectedInfoId = null;
+        // Reset UI
+        setSignedInUI(false);
+        document.getElementById('dataSourceLabel').textContent = 'Not signed in — click "Sign in with Google" to load your data';
+        showDriveNote('');
+        const searchInput = document.getElementById('searchInput');
+        if (searchInput) searchInput.value = '';
+        switchMainTab('dashboard');
+        afterDataLoaded();
+    }
+
+    async function loadFromDrive() {
+        if (!googleAccessToken) { showDriveNote('Please sign in with Google first.'); return; }
+        showDriveNote('Opening Google Drive file picker...');
+        try {
+            // Use Drive API to list CSV files — user picks one
+            const listRes = await fetch(
+                "https://www.googleapis.com/drive/v3/files?q=mimeType%3D'text%2Fcsv'%20and%20trashed%3Dfalse&fields=files(id%2Cname%2CmodifiedTime)&orderBy=modifiedTime%20desc",
+                { headers: { Authorization: 'Bearer ' + googleAccessToken } }
+            );
+            if (!listRes.ok) {
+                const err = await listRes.json();
+                if (listRes.status === 401) {
+                    // Token expired — prompt re-sign-in
+                    googleAccessToken = null;
+                    setSignedInUI(false);
+                    showDriveNote('Session expired. Please sign in again.');
+                    return;
+                }
+                throw new Error(err.error?.message || 'Drive API error');
+            }
+            const listData = await listRes.json();
+            const files = listData.files || [];
+            if (!files.length) {
+                showDriveNote('No CSV files found in your Google Drive. Please upload lab_data.csv to Drive first.');
+                return;
+            }
+            // Build a simple picker UI — show list of CSV files found
+            showCsvFilePicker(files);
         } catch (e) {
-            // user cancelled the picker — no action needed
+            showDriveNote('Error accessing Google Drive: ' + e.message);
         }
     }
 
-    async function saveToConnectedFile() {
-        if (!fileHandle) return;
+    function showCsvFilePicker(files) {
+        // Remove any existing picker
+        const existing = document.getElementById('driveFilePicker');
+        if (existing) existing.remove();
+
+        const picker = document.createElement('div');
+        picker.id = 'driveFilePicker';
+        picker.className = 'fixed inset-0 z-50 flex items-center justify-center bg-black/50';
+        picker.innerHTML = `
+            <div class="bg-white dark:bg-slate-900 rounded-xl shadow-2xl border border-slate-200 dark:border-slate-700 w-full max-w-md mx-4 overflow-hidden">
+                <div class="bg-slate-50 dark:bg-slate-800 px-5 py-3 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between">
+                    <h3 class="font-bold text-slate-800 dark:text-slate-100 text-sm flex items-center gap-2">
+                        <i class="fa-brands fa-google-drive text-sky-500"></i>Select CSV from Google Drive
+                    </h3>
+                    <button onclick="document.getElementById('driveFilePicker').remove()" class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200">
+                        <i class="fa-solid fa-xmark"></i>
+                    </button>
+                </div>
+                <div class="p-4 space-y-2 max-h-72 overflow-y-auto">
+                    ${files.map(f => `
+                        <button onclick="fetchDriveFile('${f.id}','${f.name.replace(/'/g,"\\\'")}')"
+                            class="w-full text-left px-4 py-3 rounded-lg border border-slate-200 dark:border-slate-700
+                                   hover:bg-sky-50 dark:hover:bg-sky-900/20 hover:border-sky-300 dark:hover:border-sky-700
+                                   text-sm text-slate-800 dark:text-slate-100 transition flex items-center gap-3">
+                            <i class="fa-solid fa-file-csv text-emerald-500 flex-shrink-0"></i>
+                            <div>
+                                <p class="font-medium">${f.name}</p>
+                                <p class="text-[11px] text-slate-400 dark:text-slate-500">Modified: ${new Date(f.modifiedTime).toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'})}</p>
+                            </div>
+                        </button>`).join('')}
+                </div>
+                <div class="px-5 py-3 border-t border-slate-100 dark:border-slate-700 text-[11px] text-slate-400 dark:text-slate-500">
+                    Showing all CSV files in your Google Drive
+                </div>
+            </div>`;
+        document.body.appendChild(picker);
+    }
+
+    async function fetchDriveFile(fileId, fileName) {
+        // Close picker
+        const picker = document.getElementById('driveFilePicker');
+        if (picker) picker.remove();
+        showDriveNote('Loading ' + fileName + ' from Google Drive...');
         try {
-            const writable = await fileHandle.createWritable();
-            await writable.write(serializeFromBaseline(LAB_ITEMS, INFO_ITEMS));
-            await writable.close();
+            const res = await fetch(
+                'https://www.googleapis.com/drive/v3/files/' + fileId + '?alt=media',
+                { headers: { Authorization: 'Bearer ' + googleAccessToken } }
+            );
+            if (!res.ok) throw new Error('Could not download file (status ' + res.status + ')');
+            const text = await res.text();
+            driveFileId = fileId;
+            loadFromCsvText(text);
             commitSavedBaseline();
-            const label = document.getElementById('dataSourceLabel');
-            const original = label.textContent;
-            label.textContent = 'Saved ✓';
-            setTimeout(() => { label.textContent = original; }, 1500);
+            document.getElementById('dataSourceLabel').textContent =
+                'Loaded from Google Drive: ' + fileName + ' — use "Save to Drive" after making changes';
+            showDriveNote('');
+            afterDataLoaded();
         } catch (e) {
-            alert('Could not save to the connected file: ' + e.message);
+            showDriveNote('Error loading file: ' + e.message);
+        }
+    }
+
+    async function saveToDrive() {
+        if (!googleAccessToken) { showDriveNote('Please sign in with Google first.'); return; }
+        if (!driveFileId) { showDriveNote('No Drive file loaded. Please load your CSV from Drive first.'); return; }
+        const csvContent = serializeFromBaseline(LAB_ITEMS, INFO_ITEMS);
+        showDriveNote('Saving to Google Drive...');
+        try {
+            const res = await fetch(
+                'https://www.googleapis.com/upload/drive/v3/files/' + driveFileId + '?uploadType=media',
+                {
+                    method: 'PATCH',
+                    headers: {
+                        Authorization: 'Bearer ' + googleAccessToken,
+                        'Content-Type': 'text/csv'
+                    },
+                    body: csvContent
+                }
+            );
+            if (!res.ok) {
+                const err = await res.json();
+                if (res.status === 401) {
+                    googleAccessToken = null;
+                    setSignedInUI(false);
+                    showDriveNote('Session expired. Please sign in again.');
+                    return;
+                }
+                throw new Error(err.error?.message || 'Save failed');
+            }
+            commitSavedBaseline();
+            showDriveNote('Saved to Google Drive successfully ✓');
+            setTimeout(() => showDriveNote(''), 3000);
+        } catch (e) {
+            showDriveNote('Error saving to Drive: ' + e.message);
         }
     }
 
@@ -650,7 +810,6 @@
         renderDateCheckboxList();
         updateDateDropdownLabel();
         renderInfoSelect();
-        renderInfoRecordsList();
         syncControlsDisabledState();
         populateDatalists();
         renderView();
@@ -695,22 +854,11 @@
     }
 
     // =========================== ADD DATA — LAB TABLE ===========================
-    // Track which biomarker row is being edited inline
-    let editingBioIdx = null;
-
     function renderAddLabTable() {
         const date = document.getElementById('labFormDate').value;
         const tbody = document.getElementById('addLabTableBody');
-
-        // Show/hide Delete Date button
-        const delDateBtn = document.getElementById('deleteDateBtn');
-        if (delDateBtn) {
-            const hasData = date && LAB_ITEMS.some(i => i.values[date] !== undefined);
-            delDateBtn.style.display = hasData ? '' : 'none';
-        }
-
         if (!LAB_ITEMS.length) {
-            tbody.innerHTML = '<tr><td colspan="6" class="py-6 text-center text-slate-400 dark:text-slate-500 text-xs">No biomarkers loaded yet. Use "Add Row" below to create one.</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="5" class="py-6 text-center text-slate-400 dark:text-slate-500 text-xs">No biomarkers loaded yet. Use "Add Row" below to create one.</td></tr>';
             return;
         }
         // Group by category for visual separation
@@ -719,7 +867,7 @@
         categories.forEach(cat => {
             // Category header row
             html += `<tr class="bg-slate-50 dark:bg-slate-800/80">
-                <td colspan="6" class="py-1.5 px-3 text-[11px] font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400 sticky-col sticky-col-1 bg-slate-50 dark:bg-slate-800/80">${cat}</td>
+                <td colspan="5" class="py-1.5 px-3 text-[11px] font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400 sticky-col sticky-col-1 bg-slate-50 dark:bg-slate-800/80">${cat}</td>
             </tr>`;
             LAB_ITEMS.forEach((item, idx) => {
                 if (item.category !== cat) return;
@@ -728,51 +876,18 @@
                 const flagColor = flag === 'H' ? 'text-red-600 dark:text-red-400 font-bold' :
                                   flag === 'L' ? 'text-amber-600 dark:text-amber-400 font-bold' :
                                   'text-slate-400 dark:text-slate-500';
-                const hasVal = existing !== '';
-                const inputClass = 'lab-val-input w-24 px-2 py-1 border rounded-md text-center text-xs focus:ring-1 focus:ring-sky-500 focus:outline-none' +
-                    (hasVal ? ' has-value border-amber-400 dark:border-amber-600 bg-amber-50 dark:bg-amber-900/20 text-slate-800 dark:text-slate-100'
-                            : ' border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 dark:text-slate-100');
-
-                if (editingBioIdx === idx) {
-                    // ── Inline edit mode ──
-                    html += `<tr class="bg-sky-50 dark:bg-sky-900/20 border border-sky-300 dark:border-sky-700 add-lab-row" data-idx="${idx}">
-                        <td class="sticky-col sticky-col-1 py-2 px-2 bg-sky-50 dark:bg-sky-900/20">
-                            <input type="text" class="bio-edit-input" id="editName${idx}" value="${escHtml(item.name)}" placeholder="Name">
-                        </td>
-                        <td class="sticky-col sticky-col-2 py-2 px-2 bg-sky-50 dark:bg-sky-900/20">
-                            <input type="text" class="bio-edit-input" id="editUnit${idx}" value="${escHtml(item.unit)}" placeholder="Unit">
-                        </td>
-                        <td class="sticky-col sticky-col-3 py-2 px-2 bg-sky-50 dark:bg-sky-900/20">
-                            <input type="text" class="bio-edit-input" id="editRange${idx}" value="${escHtml(item.range)}" placeholder="e.g. 70 - 99">
-                        </td>
-                        <td class="py-2 px-2">
-                            <input type="text" class="bio-edit-input" id="editCat${idx}" value="${escHtml(item.category)}" placeholder="Category">
-                        </td>
-                        <td class="py-2 px-2 text-center text-slate-400 text-[10px]">—</td>
-                        <td class="py-2 px-2 text-center whitespace-nowrap">
-                            <button onclick="saveEditBiomarker(${idx})" title="Save" class="text-green-600 dark:text-green-400 hover:text-green-700 mr-2"><i class="fa-solid fa-check"></i></button>
-                            <button onclick="cancelEditBiomarker()" title="Cancel" class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"><i class="fa-solid fa-xmark"></i></button>
-                        </td>
-                    </tr>`;
-                } else {
-                    // ── Normal display row ──
-                    html += `<tr class="hover:bg-sky-50/60 dark:hover:bg-slate-800/60 bg-white dark:bg-slate-900 add-lab-row" data-idx="${idx}">
-                        <td class="sticky-col sticky-col-1 py-2 px-3 font-medium text-slate-800 dark:text-slate-200 whitespace-nowrap bg-white dark:bg-slate-900">${escHtml(item.name)}</td>
-                        <td class="sticky-col sticky-col-2 py-2 px-3 text-slate-500 dark:text-slate-400 whitespace-nowrap bg-white dark:bg-slate-900">${escHtml(item.unit)}</td>
-                        <td class="sticky-col sticky-col-3 py-2 px-3 text-slate-500 dark:text-slate-400 whitespace-nowrap bg-white dark:bg-slate-900">${escHtml(item.range)}</td>
-                        <td class="py-2 px-3 text-center">
-                            <input type="text" class="${inputClass}"
-                                value="${escHtml(existing)}" placeholder="—"
-                                oninput="updateInlineFlag(this, ${idx})"
-                                data-idx="${idx}">
-                        </td>
-                        <td class="py-2 px-3 text-center flag-cell-${idx} ${flagColor} whitespace-nowrap">${flag || '—'}</td>
-                        <td class="py-2 px-3 text-center whitespace-nowrap">
-                            <button onclick="startEditBiomarker(${idx})" title="Edit metadata" class="text-sky-500 hover:text-sky-700 dark:hover:text-sky-300 mr-2"><i class="fa-solid fa-pencil text-[11px]"></i></button>
-                            <button onclick="deleteBiomarker(${idx})" title="Delete biomarker" class="text-red-400 hover:text-red-600 dark:hover:text-red-300"><i class="fa-solid fa-trash text-[11px]"></i></button>
-                        </td>
-                    </tr>`;
-                }
+                html += `<tr class="hover:bg-sky-50/60 dark:hover:bg-slate-800/60 bg-white dark:bg-slate-900 add-lab-row" data-idx="${idx}">
+                    <td class="sticky-col sticky-col-1 py-2 px-3 font-medium text-slate-800 dark:text-slate-200 whitespace-nowrap bg-white dark:bg-slate-900">${item.name}</td>
+                    <td class="sticky-col sticky-col-2 py-2 px-3 text-slate-500 dark:text-slate-400 whitespace-nowrap bg-white dark:bg-slate-900">${item.unit}</td>
+                    <td class="sticky-col sticky-col-3 py-2 px-3 text-slate-500 dark:text-slate-400 whitespace-nowrap bg-white dark:bg-slate-900">${item.range}</td>
+                    <td class="py-2 px-3 text-center">
+                        <input type="text" class="lab-val-input w-24 px-2 py-1 border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-800 dark:text-slate-100 text-center text-xs focus:ring-1 focus:ring-sky-500 focus:outline-none"
+                            value="${existing}" placeholder="—"
+                            oninput="updateInlineFlag(this, ${idx})"
+                            data-idx="${idx}">
+                    </td>
+                    <td class="py-2 px-3 text-center flag-cell-${idx} ${flagColor} whitespace-nowrap">${flag || '—'}</td>
+                </tr>`;
             });
         });
         tbody.innerHTML = html;
@@ -812,12 +927,15 @@
         afterDataLoaded();
         selectedDates = [date]; selectedDate = date;
         updateDateDropdownLabel(); renderDateCheckboxList(); renderView();
-        // Re-render the table so it reflects saved values
+        // Clear date and all inputs ready for next entry
+        document.getElementById('labFormDate').value = '';
         renderAddLabTable();
-        alert(`${saved} value(s) saved for ${fmtDate(date)}.`);
+        alert(`${saved} value(s) saved for ${fmtDate(date)}. Ready for next entry.`);
     }
 
     function addNewBiomarkerRow() {
+        const date = document.getElementById('labFormDate').value;
+        if (!date) { alert('Please select a date first.'); return; }
         const name = prompt('Biomarker name (e.g. Fasting Glucose):');
         if (!name || !name.trim()) return;
         const trimName = name.trim();
@@ -828,180 +946,6 @@
         LAB_ITEMS.push({ category: category.trim(), name: trimName, unit: unit.trim(), range: range.trim(), values: {}, flags: {} });
         populateDatalists();
         renderAddLabTable();
-    }
-
-    // Helper: escape HTML in user data rendered into innerHTML
-    function escHtml(str) {
-        return String(str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-    }
-
-    // =========================== DELETE / EDIT — LAB ===========================
-
-    function deleteTestDate() {
-        const date = document.getElementById('labFormDate').value;
-        if (!date) return;
-        if (!confirm(`Delete ALL values for ${fmtDate(date)}? This cannot be undone.`)) return;
-        LAB_ITEMS.forEach(item => {
-            delete item.values[date];
-            delete item.flags[date];
-        });
-        afterDataLoaded();
-        renderAddLabTable();
-        renderView();
-        alert(`All values for ${fmtDate(date)} have been deleted.`);
-    }
-
-    function deleteBiomarker(idx) {
-        const item = LAB_ITEMS[idx];
-        if (!item) return;
-        const dateCount = Object.keys(item.values).length;
-        const msg = dateCount > 0
-            ? `Delete "${item.name}" and its ${dateCount} recorded value(s)? This cannot be undone.`
-            : `Delete biomarker "${item.name}"?`;
-        if (!confirm(msg)) return;
-        LAB_ITEMS.splice(idx, 1);
-        if (editingBioIdx === idx) editingBioIdx = null;
-        populateDatalists();
-        afterDataLoaded();
-        renderAddLabTable();
-        renderView();
-    }
-
-    function startEditBiomarker(idx) {
-        editingBioIdx = idx;
-        renderAddLabTable();
-        // Focus the name field
-        const el = document.getElementById('editName' + idx);
-        if (el) el.focus();
-    }
-
-    function saveEditBiomarker(idx) {
-        const item = LAB_ITEMS[idx];
-        if (!item) return;
-        const newName  = (document.getElementById('editName'  + idx)?.value || '').trim();
-        const newUnit  = (document.getElementById('editUnit'  + idx)?.value || '').trim();
-        const newRange = (document.getElementById('editRange' + idx)?.value || '').trim();
-        const newCat   = (document.getElementById('editCat'   + idx)?.value || '').trim() || 'General';
-        if (!newName) { alert('Biomarker name cannot be empty.'); return; }
-        const rangeChanged = newRange !== item.range;
-        item.name  = newName;
-        item.unit  = newUnit;
-        item.range = newRange;
-        item.category = newCat;
-        // Recalculate all flags if range changed
-        if (rangeChanged) {
-            Object.keys(item.values).forEach(d => {
-                const f = evalFlag(item.range, item.values[d]);
-                if (f) item.flags[d] = f; else delete item.flags[d];
-            });
-        }
-        editingBioIdx = null;
-        populateDatalists();
-        afterDataLoaded();
-        renderAddLabTable();
-        renderView();
-    }
-
-    function cancelEditBiomarker() {
-        editingBioIdx = null;
-        renderAddLabTable();
-    }
-
-    // =========================== DELETE / EDIT — INFO ===========================
-
-    let editingInfoId = null;
-
-    function renderInfoRecordsList() {
-        const listWrap = document.getElementById('infoRecordsList');
-        const body = document.getElementById('infoRecordsBody');
-        const countEl = document.getElementById('infoRecordsCount');
-        if (!listWrap || !body) return;
-        if (!INFO_ITEMS.length) { listWrap.classList.add('hidden'); return; }
-        listWrap.classList.remove('hidden');
-        if (countEl) countEl.textContent = `(${INFO_ITEMS.length} record${INFO_ITEMS.length !== 1 ? 's' : ''})`;
-        body.innerHTML = INFO_ITEMS.map(rec => `
-            <div class="flex items-center justify-between px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 ${editingInfoId === rec.id ? 'ring-2 ring-sky-400' : ''}">
-                <div class="min-w-0">
-                    <span class="font-semibold text-slate-700 dark:text-slate-200 mr-2">${escHtml(rec.title)}</span>
-                    <span class="text-slate-400 dark:text-slate-500 text-[11px]">${fmtDate(rec.date)} · ${escHtml(rec.category)}</span>
-                </div>
-                <div class="flex items-center gap-2 ml-3 flex-shrink-0">
-                    <button onclick="editInfoRecord('${rec.id}')" title="Edit" class="text-sky-500 hover:text-sky-700 dark:hover:text-sky-300"><i class="fa-solid fa-pencil text-[11px]"></i></button>
-                    <button onclick="deleteInfoRecord('${rec.id}')" title="Delete" class="text-red-400 hover:text-red-600 dark:hover:text-red-300"><i class="fa-solid fa-trash text-[11px]"></i></button>
-                </div>
-            </div>`).join('');
-    }
-
-    function deleteInfoRecord(id) {
-        const idx = INFO_ITEMS.findIndex(r => r.id === id);
-        if (idx === -1) return;
-        const rec = INFO_ITEMS[idx];
-        if (!confirm(`Delete record "${rec.title}" (${fmtDate(rec.date)})? This cannot be undone.`)) return;
-        INFO_ITEMS.splice(idx, 1);
-        if (editingInfoId === id) { editingInfoId = null; clearInfoForm(); }
-        renderPatientCard();
-        renderInfoSelect();
-        renderInfoRecordsList();
-    }
-
-    function editInfoRecord(id) {
-        const rec = INFO_ITEMS.find(r => r.id === id);
-        if (!rec) return;
-        editingInfoId = id;
-        // Populate form fields
-        document.getElementById('infoFormDate').value = rec.date;
-        document.getElementById('infoFormCategory').value = rec.category;
-        document.getElementById('infoFormTitle').value = rec.title;
-        document.getElementById('infoFormDiagnosis').value = rec.diagnosis || '';
-        document.getElementById('infoFormNotes').value = rec.notes || '';
-        // Rebuild medication rows
-        const medWrap = document.getElementById('infoMedRows');
-        medWrap.innerHTML = '';
-        (rec.medications || []).forEach(m => {
-            addMedRow();
-            const row = medWrap.lastElementChild;
-            row.querySelector('.med-name').value = m.name;
-            row.querySelector('.med-type').value = m.type;
-            row.querySelector('.med-dosage').value = m.dosage;
-        });
-        if (!medWrap.children.length) addMedRow();
-        // Rebuild recommendation rows
-        const recWrap = document.getElementById('infoRecRows');
-        recWrap.innerHTML = '';
-        (rec.recommendations || []).forEach(r => {
-            addRecRow();
-            const row = recWrap.lastElementChild;
-            row.querySelector('.rec-cat').value = r.category;
-            row.querySelector('.rec-text').value = r.text;
-        });
-        if (!recWrap.children.length) addRecRow();
-        // Update button labels
-        const saveBtn = document.getElementById('infoSaveBtn');
-        const cancelBtn = document.getElementById('infoCancelEditBtn');
-        if (saveBtn) { saveBtn.innerHTML = '<i class="fa-solid fa-check mr-1"></i>Update Record'; saveBtn.className = saveBtn.className.replace('bg-sky-600 hover:bg-sky-700', 'bg-green-600 hover:bg-green-700'); }
-        if (cancelBtn) cancelBtn.style.display = '';
-        renderInfoRecordsList();
-        // Scroll form into view
-        document.getElementById('infoFormDate').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-    }
-
-    function cancelInfoEdit() {
-        editingInfoId = null;
-        clearInfoForm();
-        const saveBtn = document.getElementById('infoSaveBtn');
-        const cancelBtn = document.getElementById('infoCancelEditBtn');
-        if (saveBtn) { saveBtn.innerHTML = '<i class="fa-solid fa-plus mr-1"></i>Add Record'; saveBtn.className = saveBtn.className.replace('bg-green-600 hover:bg-green-700', 'bg-sky-600 hover:bg-sky-700'); }
-        if (cancelBtn) cancelBtn.style.display = 'none';
-        renderInfoRecordsList();
-    }
-
-    function clearInfoForm() {
-        document.getElementById('infoFormTitle').value = '';
-        document.getElementById('infoFormDiagnosis').value = '';
-        document.getElementById('infoFormNotes').value = '';
-        document.getElementById('infoMedRows').innerHTML = '';
-        document.getElementById('infoRecRows').innerHTML = '';
-        addMedRow(); addRecRow();
     }
 
     function addMedRow() {
@@ -1045,29 +989,18 @@
             text: r.querySelector('.rec-text').value.trim()
         })).filter(r => r.text);
 
-        if (editingInfoId) {
-            // ── Update existing record ──
-            const idx = INFO_ITEMS.findIndex(r => r.id === editingInfoId);
-            if (idx !== -1) {
-                INFO_ITEMS[idx] = { ...INFO_ITEMS[idx], date, category, title, diagnosis, medications: meds, recommendations: recs, notes };
-            }
-            INFO_ITEMS.sort((a, b) => a.date.localeCompare(b.date));
-            editingInfoId = null;
-            // Reset button state
-            const saveBtn = document.getElementById('infoSaveBtn');
-            const cancelBtn = document.getElementById('infoCancelEditBtn');
-            if (saveBtn) { saveBtn.innerHTML = '<i class="fa-solid fa-plus mr-1"></i>Add Record'; saveBtn.className = saveBtn.className.replace('bg-green-600 hover:bg-green-700', 'bg-sky-600 hover:bg-sky-700'); }
-            if (cancelBtn) cancelBtn.style.display = 'none';
-        } else {
-            // ── Add new record ──
-            INFO_ITEMS.push({ id: 'info-' + date + '-' + Date.now(), date, category, title, diagnosis, medications: meds, recommendations: recs, notes });
-            INFO_ITEMS.sort((a, b) => a.date.localeCompare(b.date));
-        }
+        INFO_ITEMS.push({ id: 'info-' + date + '-' + (INFO_ITEMS.length + 1), date, category, title, diagnosis, medications: meds, recommendations: recs, notes });
+        INFO_ITEMS.sort((a, b) => a.date.localeCompare(b.date));
 
-        clearInfoForm();
+        document.getElementById('infoFormTitle').value = '';
+        document.getElementById('infoFormDiagnosis').value = '';
+        document.getElementById('infoFormNotes').value = '';
+        document.getElementById('infoMedRows').innerHTML = '';
+        document.getElementById('infoRecRows').innerHTML = '';
+        addMedRow(); addRecRow();
+
         renderPatientCard();
         renderInfoSelect();
-        renderInfoRecordsList();
     }
 
     function saveProfile() {
@@ -1080,27 +1013,29 @@
     // =========================== HOME / RESET ===========================
     function resetToHome() {
         if (LAB_ITEMS.length || INFO_ITEMS.length || PROFILE.name) {
-            if (!confirm('Return to the start screen? This will clear all loaded data from the dashboard (your CSV file is not deleted).')) return;
+            if (!confirm('Return to the start screen? This will clear all loaded data from the dashboard (your CSV file on Google Drive is not affected).')) return;
         }
-        // Reset all state
+        // Reset data state — keep Google auth state so user does not have to sign in again
         PROFILE = { name: '', dob: '', gender: '' };
         LAB_ITEMS = [];
         INFO_ITEMS = [];
         SAVED_LAB_ITEMS = [];
         SAVED_INFO_ITEMS = [];
         fileHandle = null;
+        driveFileId = null;
         selectedDates = [];
         selectedDate = '';
         searchQuery = '';
         activeMode = 'dates';
         selectedInfoId = null;
 
-        // Reset UI controls
-        document.getElementById('dataSourceLabel').textContent = 'No CSV loaded — showing empty dashboard';
-        document.getElementById('csvFileInput').value = '';
-        const saveBtn = document.getElementById('saveBtn');
-        saveBtn.disabled = true;
-        saveBtn.classList.add('opacity-40', 'cursor-not-allowed');
+        // Update data source label based on current auth state
+        if (googleAccessToken) {
+            document.getElementById('dataSourceLabel').textContent = 'Signed in with Google — click "Load from Drive" to load your CSV';
+        } else {
+            document.getElementById('dataSourceLabel').textContent = 'Not signed in — click "Sign in with Google" to load your data';
+        }
+        showDriveNote('');
 
         // Close edit panel if open
         switchMainTab('dashboard');
@@ -1148,8 +1083,12 @@
     function cancelInfoForm() {
         document.getElementById('infoFormDate').value = '';
         document.getElementById('infoFormCategory').selectedIndex = 0;
-        clearInfoForm();
-        renderInfoRecordsList();
+        document.getElementById('infoFormTitle').value = '';
+        document.getElementById('infoFormDiagnosis').value = '';
+        document.getElementById('infoFormNotes').value = '';
+        document.getElementById('infoMedRows').innerHTML = '';
+        document.getElementById('infoRecRows').innerHTML = '';
+        addMedRow(); addRecRow();
     }
 
     function clearAllInfoData() {
@@ -1157,16 +1096,9 @@
         if (unsavedCount === 0) { alert('No unsaved information records to clear. All current data matches the saved CSV.'); return; }
         if (!confirm(`Clear ${unsavedCount} unsaved information record(s)? Only records added since the last save will be removed. Saved data is kept.\n\nThis cannot be undone.`)) return;
         INFO_ITEMS = deepClone(SAVED_INFO_ITEMS);
-        editingInfoId = null;
         renderPatientCard();
         renderInfoSelect();
-        renderInfoRecordsList();
         cancelInfoForm();
-        // Reset save button if it was in edit mode
-        const saveBtn = document.getElementById('infoSaveBtn');
-        const cancelBtn = document.getElementById('infoCancelEditBtn');
-        if (saveBtn) { saveBtn.innerHTML = '<i class="fa-solid fa-plus mr-1"></i>Add Record'; saveBtn.className = saveBtn.className.replace('bg-green-600 hover:bg-green-700', 'bg-sky-600 hover:bg-sky-700'); }
-        if (cancelBtn) cancelBtn.style.display = 'none';
     }
 
     // =========================== DATE DROPDOWN ===========================
@@ -1606,11 +1538,43 @@
     }
 
     // =========================== DASHBOARD RENDER ===========================
+    function clearDashboard() {
+        // Health score ring
+        const arc = document.getElementById('scoreArc');
+        if (arc) { arc.style.strokeDashoffset = '226'; arc.style.stroke = '#0284c7'; }
+        const scoreNum = document.getElementById('scoreNumber');
+        if (scoreNum) scoreNum.textContent = '—';
+        const scoreLbl = document.getElementById('scoreLabel');
+        if (scoreLbl) { scoreLbl.textContent = '—'; scoreLbl.className = 'text-base font-bold text-slate-800 dark:text-white'; }
+        const scoreSub = document.getElementById('scoreSubtitle');
+        if (scoreSub) scoreSub.textContent = 'Load data to see your score';
+
+        // KPI cards
+        ['db_glucose','db_hba1c','db_ldl','db_hgb'].forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.textContent = '—';
+        });
+        ['db_glucose_flag','db_hba1c_flag','db_ldl_flag','db_hgb_flag'].forEach(id => {
+            const el = document.getElementById(id);
+            if (el) { el.textContent = ''; el.className = 'text-[10px] font-semibold mt-0.5'; }
+        });
+
+        // Alerts, insights, overdue
+        document.getElementById('db_alerts').innerHTML = '';
+        document.getElementById('db_insights').innerHTML = '<p class="text-slate-400 dark:text-slate-500 text-sm">Load a CSV file to see your health insights.</p>';
+        document.getElementById('db_overdue').innerHTML = '<p class="text-slate-400 dark:text-slate-500">No data loaded.</p>';
+
+        // Destroy all charts
+        ['chartBloodSugar','chartLipid','chartStatus','chartHaemo','chartBar'].forEach(id => destroyChart(id));
+
+        // Clear biomarker picker
+        const picker = document.getElementById('biomarkerPickerBar');
+        if (picker) picker.innerHTML = '';
+    }
+
     function renderDashboard() {
         if (!LAB_ITEMS.length) {
-            document.getElementById('db_insights').innerHTML = '<p class="text-slate-400 dark:text-slate-500 text-sm">Load a CSV file to see your health insights.</p>';
-            document.getElementById('db_alerts').innerHTML = '';
-            document.getElementById('db_overdue').innerHTML = '<p class="text-slate-400 dark:text-slate-500">No data loaded.</p>';
+            clearDashboard();
             return;
         }
         const dates = allDates();
@@ -1950,7 +1914,6 @@
             const panel = document.getElementById('dateDropdownPanel');
             if (wrapper && !wrapper.contains(e.target) && !panel.classList.contains('hidden')) panel.classList.add('hidden');
         });
-        if (!window.showOpenFilePicker) document.getElementById('fsaNote').classList.remove('hidden');
         // Start on Dashboard tab
         switchMainTab('dashboard');
         afterDataLoaded();
