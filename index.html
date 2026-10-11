@@ -54,6 +54,14 @@
     .main-tab-btn:hover:not(.active) { background: rgba(255,255,255,0.1); color: #e2e8f0; }
     .chart-card { background: #fff; border-radius: 12px; border: 1px solid #e2e8f0; padding: 16px; }
     html.dark .chart-card { background: #0f172a !important; border-color: #334155 !important; }
+
+    /* Existing value highlight in Add Data tab */
+    .lab-val-input.has-value { background-color: #fefce8 !important; border-color: #f59e0b !important; }
+    html.dark .lab-val-input.has-value { background-color: rgba(245,158,11,0.15) !important; border-color: #d97706 !important; }
+
+    /* Inline edit row for biomarker metadata */
+    .bio-edit-input { width:100%; padding:2px 6px; border:1px solid #0284c7; border-radius:4px; font-size:11px; background:#eff6ff; color:#1e293b; }
+    html.dark .bio-edit-input { background:#1e3a5f; color:#e2e8f0; border-color:#0284c7; }
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <script src="https://accounts.google.com/gsi/client" async defer></script>
@@ -329,9 +337,10 @@
                         <label class="block font-semibold text-slate-600 dark:text-slate-300 mb-1"><i class="fa-solid fa-calendar-day text-sky-500 mr-1"></i>Date for this entry</label>
                         <input type="date" id="labFormDate" onchange="renderAddLabTable()" class="px-2 py-1.5 border border-slate-300 dark:border-slate-600 rounded-lg bg-slate-50 dark:bg-slate-800 dark:text-slate-100">
                     </div>
-                    <p class="text-[11px] text-slate-400 dark:text-slate-500 max-w-lg">Test, Unit and Range are fixed. Select a date, enter values — High/Low flag auto-calculates. Use <strong>Add Row</strong> for a new biomarker.</p>
+                    <p class="text-[11px] text-slate-400 dark:text-slate-500 max-w-lg">Select a date to load existing values (highlighted amber). Enter/update values — flags auto-calculate. Pencil edits metadata; trash removes a biomarker.</p>
                     <div class="ml-auto flex flex-wrap gap-2">
                         <button onclick="saveLabTableEntries()" class="px-3 py-1.5 bg-sky-600 hover:bg-sky-700 text-white rounded-lg font-semibold"><i class="fa-solid fa-check mr-1"></i>Save Entries</button>
+                        <button id="deleteDateBtn" onclick="deleteTestDate()" style="display:none" class="px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded-lg font-semibold"><i class="fa-solid fa-calendar-xmark mr-1"></i>Delete Date</button>
                         <button onclick="cancelLabForm()" class="px-3 py-1.5 bg-slate-200 hover:bg-slate-300 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 rounded-lg font-semibold"><i class="fa-solid fa-xmark mr-1"></i>Cancel</button>
                         <button onclick="clearAllLabData()" class="px-3 py-1.5 bg-red-50 hover:bg-red-100 dark:bg-red-900/20 dark:hover:bg-red-900/40 text-red-600 dark:text-red-400 border border-red-200 dark:border-red-800 rounded-lg font-semibold"><i class="fa-solid fa-trash-can mr-1"></i>Clear Unsaved</button>
                     </div>
@@ -344,9 +353,10 @@
                             <th class="sticky-col sticky-col-3 py-2.5 px-3 text-left bg-slate-100 dark:bg-slate-800 whitespace-nowrap">Range</th>
                             <th class="py-2.5 px-3 text-center whitespace-nowrap min-w-[120px]">Value</th>
                             <th class="py-2.5 px-3 text-center whitespace-nowrap">Flag</th>
+                            <th class="py-2.5 px-3 text-center whitespace-nowrap">Actions</th>
                         </tr></thead>
                         <tbody id="addLabTableBody" class="divide-y divide-slate-100 dark:divide-slate-700">
-                            <tr><td colspan="5" class="py-6 text-center text-slate-400 dark:text-slate-500 text-xs">Load a CSV to see biomarkers here, then select a date and enter values.</td></tr>
+                            <tr><td colspan="6" class="py-6 text-center text-slate-400 dark:text-slate-500 text-xs">Load a CSV to see biomarkers here, then select a date and enter values.</td></tr>
                         </tbody>
                     </table>
                 </div>
@@ -379,9 +389,15 @@
                 <div><label class="block font-semibold text-slate-600 dark:text-slate-300 mb-1">Notes (optional)</label>
                     <textarea id="infoFormNotes" rows="2" class="w-full px-2 py-1.5 border border-slate-300 dark:border-slate-600 rounded-lg bg-slate-50 dark:bg-slate-800 dark:text-slate-100"></textarea></div>
                 <div class="flex flex-wrap items-center gap-2">
-                    <button onclick="addInfoRecord()" class="px-4 py-2 bg-sky-600 hover:bg-sky-700 text-white rounded-lg font-semibold"><i class="fa-solid fa-plus mr-1"></i>Add Record</button>
+                    <button id="infoSaveBtn" onclick="addInfoRecord()" class="px-4 py-2 bg-sky-600 hover:bg-sky-700 text-white rounded-lg font-semibold"><i class="fa-solid fa-plus mr-1"></i>Add Record</button>
+                    <button id="infoCancelEditBtn" onclick="cancelInfoEdit()" style="display:none" class="px-4 py-2 bg-slate-200 hover:bg-slate-300 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 rounded-lg font-semibold"><i class="fa-solid fa-xmark mr-1"></i>Cancel Edit</button>
                     <button onclick="cancelInfoForm()" class="px-4 py-2 bg-slate-200 hover:bg-slate-300 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 rounded-lg font-semibold"><i class="fa-solid fa-xmark mr-1"></i>Cancel</button>
                     <button onclick="clearAllInfoData()" class="ml-auto px-4 py-2 bg-red-50 hover:bg-red-100 dark:bg-red-900/20 dark:hover:bg-red-900/40 text-red-600 dark:text-red-400 border border-red-200 dark:border-red-800 rounded-lg font-semibold"><i class="fa-solid fa-trash-can mr-1"></i>Clear Unsaved</button>
+                </div>
+                <!-- Existing info records list -->
+                <div id="infoRecordsList" class="hidden mt-4 border-t border-slate-200 dark:border-slate-700 pt-4">
+                    <h4 class="font-bold text-slate-600 dark:text-slate-300 mb-2"><i class="fa-solid fa-list mr-1 text-sky-500"></i>Existing Records <span id="infoRecordsCount" class="text-xs font-normal text-slate-400"></span></h4>
+                    <div id="infoRecordsBody" class="space-y-1.5"></div>
                 </div>
             </div>
             <!-- ===== Profile Tab ===== -->
@@ -810,6 +826,7 @@
         renderDateCheckboxList();
         updateDateDropdownLabel();
         renderInfoSelect();
+        renderInfoRecordsList();
         syncControlsDisabledState();
         populateDatalists();
         renderView();
@@ -854,20 +871,32 @@
     }
 
     // =========================== ADD DATA — LAB TABLE ===========================
+    let editingBioIdx = null;
+
+    function escHtml(str) {
+        return String(str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    }
+
     function renderAddLabTable() {
         const date = document.getElementById('labFormDate').value;
         const tbody = document.getElementById('addLabTableBody');
+
+        // Show/hide Delete Date button
+        const delDateBtn = document.getElementById('deleteDateBtn');
+        if (delDateBtn) {
+            const hasData = date && LAB_ITEMS.some(i => i.values[date] !== undefined);
+            delDateBtn.style.display = hasData ? '' : 'none';
+        }
+
         if (!LAB_ITEMS.length) {
-            tbody.innerHTML = '<tr><td colspan="5" class="py-6 text-center text-slate-400 dark:text-slate-500 text-xs">No biomarkers loaded yet. Use "Add Row" below to create one.</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="6" class="py-6 text-center text-slate-400 dark:text-slate-500 text-xs">No biomarkers loaded yet. Use "Add Row" below to create one.</td></tr>';
             return;
         }
-        // Group by category for visual separation
         const categories = Array.from(new Set(LAB_ITEMS.map(i => i.category)));
         let html = '';
         categories.forEach(cat => {
-            // Category header row
             html += `<tr class="bg-slate-50 dark:bg-slate-800/80">
-                <td colspan="5" class="py-1.5 px-3 text-[11px] font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400 sticky-col sticky-col-1 bg-slate-50 dark:bg-slate-800/80">${cat}</td>
+                <td colspan="6" class="py-1.5 px-3 text-[11px] font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400 sticky-col sticky-col-1 bg-slate-50 dark:bg-slate-800/80">${escHtml(cat)}</td>
             </tr>`;
             LAB_ITEMS.forEach((item, idx) => {
                 if (item.category !== cat) return;
@@ -876,18 +905,48 @@
                 const flagColor = flag === 'H' ? 'text-red-600 dark:text-red-400 font-bold' :
                                   flag === 'L' ? 'text-amber-600 dark:text-amber-400 font-bold' :
                                   'text-slate-400 dark:text-slate-500';
-                html += `<tr class="hover:bg-sky-50/60 dark:hover:bg-slate-800/60 bg-white dark:bg-slate-900 add-lab-row" data-idx="${idx}">
-                    <td class="sticky-col sticky-col-1 py-2 px-3 font-medium text-slate-800 dark:text-slate-200 whitespace-nowrap bg-white dark:bg-slate-900">${item.name}</td>
-                    <td class="sticky-col sticky-col-2 py-2 px-3 text-slate-500 dark:text-slate-400 whitespace-nowrap bg-white dark:bg-slate-900">${item.unit}</td>
-                    <td class="sticky-col sticky-col-3 py-2 px-3 text-slate-500 dark:text-slate-400 whitespace-nowrap bg-white dark:bg-slate-900">${item.range}</td>
-                    <td class="py-2 px-3 text-center">
-                        <input type="text" class="lab-val-input w-24 px-2 py-1 border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-800 dark:text-slate-100 text-center text-xs focus:ring-1 focus:ring-sky-500 focus:outline-none"
-                            value="${existing}" placeholder="—"
-                            oninput="updateInlineFlag(this, ${idx})"
-                            data-idx="${idx}">
-                    </td>
-                    <td class="py-2 px-3 text-center flag-cell-${idx} ${flagColor} whitespace-nowrap">${flag || '—'}</td>
-                </tr>`;
+                const hasVal = existing !== '';
+                const inputClass = 'lab-val-input w-24 px-2 py-1 border rounded-md text-center text-xs focus:ring-1 focus:ring-sky-500 focus:outline-none' +
+                    (hasVal ? ' has-value' : ' border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 dark:text-slate-100');
+
+                if (editingBioIdx === idx) {
+                    html += `<tr class="bg-sky-50 dark:bg-sky-900/20 border border-sky-300 dark:border-sky-700 add-lab-row" data-idx="${idx}">
+                        <td class="sticky-col sticky-col-1 py-2 px-2 bg-sky-50 dark:bg-sky-900/20">
+                            <input type="text" class="bio-edit-input" id="editName${idx}" value="${escHtml(item.name)}" placeholder="Name">
+                        </td>
+                        <td class="sticky-col sticky-col-2 py-2 px-2 bg-sky-50 dark:bg-sky-900/20">
+                            <input type="text" class="bio-edit-input" id="editUnit${idx}" value="${escHtml(item.unit)}" placeholder="Unit">
+                        </td>
+                        <td class="sticky-col sticky-col-3 py-2 px-2 bg-sky-50 dark:bg-sky-900/20">
+                            <input type="text" class="bio-edit-input" id="editRange${idx}" value="${escHtml(item.range)}" placeholder="e.g. 70 - 99">
+                        </td>
+                        <td class="py-2 px-2">
+                            <input type="text" class="bio-edit-input" id="editCat${idx}" value="${escHtml(item.category)}" placeholder="Category">
+                        </td>
+                        <td class="py-2 px-2 text-center text-slate-400 text-[10px]">—</td>
+                        <td class="py-2 px-2 text-center whitespace-nowrap">
+                            <button onclick="saveEditBiomarker(${idx})" title="Save" class="text-green-600 dark:text-green-400 hover:text-green-700 mr-2"><i class="fa-solid fa-check"></i></button>
+                            <button onclick="cancelEditBiomarker()" title="Cancel" class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"><i class="fa-solid fa-xmark"></i></button>
+                        </td>
+                    </tr>`;
+                } else {
+                    html += `<tr class="hover:bg-sky-50/60 dark:hover:bg-slate-800/60 bg-white dark:bg-slate-900 add-lab-row" data-idx="${idx}">
+                        <td class="sticky-col sticky-col-1 py-2 px-3 font-medium text-slate-800 dark:text-slate-200 whitespace-nowrap bg-white dark:bg-slate-900">${escHtml(item.name)}</td>
+                        <td class="sticky-col sticky-col-2 py-2 px-3 text-slate-500 dark:text-slate-400 whitespace-nowrap bg-white dark:bg-slate-900">${escHtml(item.unit)}</td>
+                        <td class="sticky-col sticky-col-3 py-2 px-3 text-slate-500 dark:text-slate-400 whitespace-nowrap bg-white dark:bg-slate-900">${escHtml(item.range)}</td>
+                        <td class="py-2 px-3 text-center">
+                            <input type="text" class="${inputClass}"
+                                value="${escHtml(existing)}" placeholder="—"
+                                oninput="updateInlineFlag(this, ${idx})"
+                                data-idx="${idx}">
+                        </td>
+                        <td class="py-2 px-3 text-center flag-cell-${idx} ${flagColor} whitespace-nowrap">${flag || '—'}</td>
+                        <td class="py-2 px-3 text-center whitespace-nowrap">
+                            <button onclick="startEditBiomarker(${idx})" title="Edit metadata" class="text-sky-500 hover:text-sky-700 dark:hover:text-sky-300 mr-2"><i class="fa-solid fa-pencil text-[11px]"></i></button>
+                            <button onclick="deleteBiomarker(${idx})" title="Delete biomarker" class="text-red-400 hover:text-red-600 dark:hover:text-red-300"><i class="fa-solid fa-trash text-[11px]"></i></button>
+                        </td>
+                    </tr>`;
+                }
             });
         });
         tbody.innerHTML = html;
@@ -934,8 +993,6 @@
     }
 
     function addNewBiomarkerRow() {
-        const date = document.getElementById('labFormDate').value;
-        if (!date) { alert('Please select a date first.'); return; }
         const name = prompt('Biomarker name (e.g. Fasting Glucose):');
         if (!name || !name.trim()) return;
         const trimName = name.trim();
@@ -946,6 +1003,162 @@
         LAB_ITEMS.push({ category: category.trim(), name: trimName, unit: unit.trim(), range: range.trim(), values: {}, flags: {} });
         populateDatalists();
         renderAddLabTable();
+    }
+
+    // =========================== DELETE / EDIT — LAB ===========================
+
+    function deleteTestDate() {
+        const date = document.getElementById('labFormDate').value;
+        if (!date) return;
+        if (!confirm(`Delete ALL values for ${fmtDate(date)}? This cannot be undone.`)) return;
+        LAB_ITEMS.forEach(item => { delete item.values[date]; delete item.flags[date]; });
+        afterDataLoaded();
+        renderAddLabTable();
+        renderView();
+        alert(`All values for ${fmtDate(date)} have been deleted.`);
+    }
+
+    function deleteBiomarker(idx) {
+        const item = LAB_ITEMS[idx];
+        if (!item) return;
+        const dateCount = Object.keys(item.values).length;
+        const msg = dateCount > 0
+            ? `Delete "${item.name}" and its ${dateCount} recorded value(s)? This cannot be undone.`
+            : `Delete biomarker "${item.name}"?`;
+        if (!confirm(msg)) return;
+        LAB_ITEMS.splice(idx, 1);
+        if (editingBioIdx === idx) editingBioIdx = null;
+        populateDatalists();
+        afterDataLoaded();
+        renderAddLabTable();
+        renderView();
+    }
+
+    function startEditBiomarker(idx) {
+        editingBioIdx = idx;
+        renderAddLabTable();
+        const el = document.getElementById('editName' + idx);
+        if (el) el.focus();
+    }
+
+    function saveEditBiomarker(idx) {
+        const item = LAB_ITEMS[idx];
+        if (!item) return;
+        const newName  = (document.getElementById('editName'  + idx)?.value || '').trim();
+        const newUnit  = (document.getElementById('editUnit'  + idx)?.value || '').trim();
+        const newRange = (document.getElementById('editRange' + idx)?.value || '').trim();
+        const newCat   = (document.getElementById('editCat'   + idx)?.value || '').trim() || 'General';
+        if (!newName) { alert('Biomarker name cannot be empty.'); return; }
+        const rangeChanged = newRange !== item.range;
+        item.name = newName; item.unit = newUnit; item.range = newRange; item.category = newCat;
+        if (rangeChanged) {
+            Object.keys(item.values).forEach(d => {
+                const f = evalFlag(item.range, item.values[d]);
+                if (f) item.flags[d] = f; else delete item.flags[d];
+            });
+        }
+        editingBioIdx = null;
+        populateDatalists();
+        afterDataLoaded();
+        renderAddLabTable();
+        renderView();
+    }
+
+    function cancelEditBiomarker() {
+        editingBioIdx = null;
+        renderAddLabTable();
+    }
+
+    // =========================== DELETE / EDIT — INFO ===========================
+
+    let editingInfoId = null;
+
+    function renderInfoRecordsList() {
+        const listWrap = document.getElementById('infoRecordsList');
+        const body = document.getElementById('infoRecordsBody');
+        const countEl = document.getElementById('infoRecordsCount');
+        if (!listWrap || !body) return;
+        if (!INFO_ITEMS.length) { listWrap.classList.add('hidden'); return; }
+        listWrap.classList.remove('hidden');
+        if (countEl) countEl.textContent = `(${INFO_ITEMS.length} record${INFO_ITEMS.length !== 1 ? 's' : ''})`;
+        body.innerHTML = INFO_ITEMS.map(rec => `
+            <div class="flex items-center justify-between px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 ${editingInfoId === rec.id ? 'ring-2 ring-sky-400' : ''}">
+                <div class="min-w-0">
+                    <span class="font-semibold text-slate-700 dark:text-slate-200 mr-2">${escHtml(rec.title)}</span>
+                    <span class="text-slate-400 dark:text-slate-500 text-[11px]">${fmtDate(rec.date)} · ${escHtml(rec.category)}</span>
+                </div>
+                <div class="flex items-center gap-2 ml-3 flex-shrink-0">
+                    <button onclick="editInfoRecord('${rec.id}')" title="Edit" class="text-sky-500 hover:text-sky-700 dark:hover:text-sky-300"><i class="fa-solid fa-pencil text-[11px]"></i></button>
+                    <button onclick="deleteInfoRecord('${rec.id}')" title="Delete" class="text-red-400 hover:text-red-600 dark:hover:text-red-300"><i class="fa-solid fa-trash text-[11px]"></i></button>
+                </div>
+            </div>`).join('');
+    }
+
+    function deleteInfoRecord(id) {
+        const idx = INFO_ITEMS.findIndex(r => r.id === id);
+        if (idx === -1) return;
+        const rec = INFO_ITEMS[idx];
+        if (!confirm(`Delete record "${rec.title}" (${fmtDate(rec.date)})? This cannot be undone.`)) return;
+        INFO_ITEMS.splice(idx, 1);
+        if (editingInfoId === id) { editingInfoId = null; clearInfoForm(); }
+        renderPatientCard();
+        renderInfoSelect();
+        renderInfoRecordsList();
+    }
+
+    function editInfoRecord(id) {
+        const rec = INFO_ITEMS.find(r => r.id === id);
+        if (!rec) return;
+        editingInfoId = id;
+        document.getElementById('infoFormDate').value = rec.date;
+        document.getElementById('infoFormCategory').value = rec.category;
+        document.getElementById('infoFormTitle').value = rec.title;
+        document.getElementById('infoFormDiagnosis').value = rec.diagnosis || '';
+        document.getElementById('infoFormNotes').value = rec.notes || '';
+        const medWrap = document.getElementById('infoMedRows');
+        medWrap.innerHTML = '';
+        (rec.medications || []).forEach(m => {
+            addMedRow();
+            const row = medWrap.lastElementChild;
+            row.querySelector('.med-name').value = m.name;
+            row.querySelector('.med-type').value = m.type;
+            row.querySelector('.med-dosage').value = m.dosage;
+        });
+        if (!medWrap.children.length) addMedRow();
+        const recWrap = document.getElementById('infoRecRows');
+        recWrap.innerHTML = '';
+        (rec.recommendations || []).forEach(r => {
+            addRecRow();
+            const row = recWrap.lastElementChild;
+            row.querySelector('.rec-cat').value = r.category;
+            row.querySelector('.rec-text').value = r.text;
+        });
+        if (!recWrap.children.length) addRecRow();
+        const saveBtn = document.getElementById('infoSaveBtn');
+        const cancelBtn = document.getElementById('infoCancelEditBtn');
+        if (saveBtn) { saveBtn.innerHTML = '<i class="fa-solid fa-check mr-1"></i>Update Record'; saveBtn.className = saveBtn.className.replace('bg-sky-600 hover:bg-sky-700', 'bg-green-600 hover:bg-green-700'); }
+        if (cancelBtn) cancelBtn.style.display = '';
+        renderInfoRecordsList();
+        document.getElementById('infoFormDate').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+
+    function cancelInfoEdit() {
+        editingInfoId = null;
+        clearInfoForm();
+        const saveBtn = document.getElementById('infoSaveBtn');
+        const cancelBtn = document.getElementById('infoCancelEditBtn');
+        if (saveBtn) { saveBtn.innerHTML = '<i class="fa-solid fa-plus mr-1"></i>Add Record'; saveBtn.className = saveBtn.className.replace('bg-green-600 hover:bg-green-700', 'bg-sky-600 hover:bg-sky-700'); }
+        if (cancelBtn) cancelBtn.style.display = 'none';
+        renderInfoRecordsList();
+    }
+
+    function clearInfoForm() {
+        document.getElementById('infoFormTitle').value = '';
+        document.getElementById('infoFormDiagnosis').value = '';
+        document.getElementById('infoFormNotes').value = '';
+        document.getElementById('infoMedRows').innerHTML = '';
+        document.getElementById('infoRecRows').innerHTML = '';
+        addMedRow(); addRecRow();
     }
 
     function addMedRow() {
@@ -989,18 +1202,28 @@
             text: r.querySelector('.rec-text').value.trim()
         })).filter(r => r.text);
 
-        INFO_ITEMS.push({ id: 'info-' + date + '-' + (INFO_ITEMS.length + 1), date, category, title, diagnosis, medications: meds, recommendations: recs, notes });
-        INFO_ITEMS.sort((a, b) => a.date.localeCompare(b.date));
+        if (editingInfoId) {
+            // Update existing record
+            const idx = INFO_ITEMS.findIndex(r => r.id === editingInfoId);
+            if (idx !== -1) {
+                INFO_ITEMS[idx] = { ...INFO_ITEMS[idx], date, category, title, diagnosis, medications: meds, recommendations: recs, notes };
+            }
+            INFO_ITEMS.sort((a, b) => a.date.localeCompare(b.date));
+            editingInfoId = null;
+            const saveBtn = document.getElementById('infoSaveBtn');
+            const cancelBtn = document.getElementById('infoCancelEditBtn');
+            if (saveBtn) { saveBtn.innerHTML = '<i class="fa-solid fa-plus mr-1"></i>Add Record'; saveBtn.className = saveBtn.className.replace('bg-green-600 hover:bg-green-700', 'bg-sky-600 hover:bg-sky-700'); }
+            if (cancelBtn) cancelBtn.style.display = 'none';
+        } else {
+            // Add new record
+            INFO_ITEMS.push({ id: 'info-' + date + '-' + Date.now(), date, category, title, diagnosis, medications: meds, recommendations: recs, notes });
+            INFO_ITEMS.sort((a, b) => a.date.localeCompare(b.date));
+        }
 
-        document.getElementById('infoFormTitle').value = '';
-        document.getElementById('infoFormDiagnosis').value = '';
-        document.getElementById('infoFormNotes').value = '';
-        document.getElementById('infoMedRows').innerHTML = '';
-        document.getElementById('infoRecRows').innerHTML = '';
-        addMedRow(); addRecRow();
-
+        clearInfoForm();
         renderPatientCard();
         renderInfoSelect();
+        renderInfoRecordsList();
     }
 
     function saveProfile() {
@@ -1083,12 +1306,8 @@
     function cancelInfoForm() {
         document.getElementById('infoFormDate').value = '';
         document.getElementById('infoFormCategory').selectedIndex = 0;
-        document.getElementById('infoFormTitle').value = '';
-        document.getElementById('infoFormDiagnosis').value = '';
-        document.getElementById('infoFormNotes').value = '';
-        document.getElementById('infoMedRows').innerHTML = '';
-        document.getElementById('infoRecRows').innerHTML = '';
-        addMedRow(); addRecRow();
+        clearInfoForm();
+        renderInfoRecordsList();
     }
 
     function clearAllInfoData() {
@@ -1096,9 +1315,15 @@
         if (unsavedCount === 0) { alert('No unsaved information records to clear. All current data matches the saved CSV.'); return; }
         if (!confirm(`Clear ${unsavedCount} unsaved information record(s)? Only records added since the last save will be removed. Saved data is kept.\n\nThis cannot be undone.`)) return;
         INFO_ITEMS = deepClone(SAVED_INFO_ITEMS);
+        editingInfoId = null;
         renderPatientCard();
         renderInfoSelect();
+        renderInfoRecordsList();
         cancelInfoForm();
+        const saveBtn = document.getElementById('infoSaveBtn');
+        const cancelBtn = document.getElementById('infoCancelEditBtn');
+        if (saveBtn) { saveBtn.innerHTML = '<i class="fa-solid fa-plus mr-1"></i>Add Record'; saveBtn.className = saveBtn.className.replace('bg-green-600 hover:bg-green-700', 'bg-sky-600 hover:bg-sky-700'); }
+        if (cancelBtn) cancelBtn.style.display = 'none';
     }
 
     // =========================== DATE DROPDOWN ===========================
